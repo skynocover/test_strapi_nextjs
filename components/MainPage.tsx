@@ -1,7 +1,7 @@
 import React from 'react';
 import * as antd from 'antd';
 
-import { AppContext, service } from './AppContext';
+import { AppContext } from './AppContext';
 import { useRouter } from 'next/router';
 import { useSession, signOut } from 'next-auth/client';
 
@@ -14,27 +14,31 @@ const MainPage = ({ menuKey, content }: MainPageProps) => {
   const router = useRouter();
   const appCtx = React.useContext(AppContext);
 
+  const [session, loading] = useSession();
+
+  React.useEffect(() => {}, []);
+
   const renderHeader = () => {
     return (
       <antd.Layout.Header
-        className="d-flex align-items-center px-3 bg-white shadow-sm"
+        className="flex items-center px-3 bg-white shadow-sm"
         style={{ zIndex: 1 }}
       >
         <div>
-          <span className="ml-2">{menuKey}</span>
+          <span className="ml-2 text-white">{menuKey}</span>
         </div>
 
-        <div className="flex-fill" />
+        <div className="flex-1" />
         <antd.Popover
           placement="bottom"
           content={
-            <div className="d-flex flex-column">
+            <div className="flex flex-column">
               <antd.Button
                 type="link"
                 danger
                 onClick={() => {
-                  router.push('/');
                   signOut();
+                  router.push('/');
                 }}
               >
                 登出
@@ -43,7 +47,7 @@ const MainPage = ({ menuKey, content }: MainPageProps) => {
           }
         >
           <antd.Button type="link" icon={<i className="fa fa-user mr-2" />}>
-            {`使用者 : ${appCtx.account}`}
+            {`使用者 : ${session?.user?.name}`}
           </antd.Button>
         </antd.Popover>
       </antd.Layout.Header>
@@ -59,7 +63,7 @@ const MainPage = ({ menuKey, content }: MainPageProps) => {
   };
 
   const renderMenu = () => {
-    const init: service[] = [{ id: '', name: 'Home', port: '', domain: '' }];
+    const init: string[] = ['Home', 'Reserve', 'Dishes'];
     return (
       <antd.Layout.Sider collapsible trigger={null} style={{ overflow: 'auto' }}>
         <antd.Menu
@@ -70,11 +74,11 @@ const MainPage = ({ menuKey, content }: MainPageProps) => {
             router.push(key);
           }}
         >
-          {init.concat(appCtx.dataSource).map((server) => {
+          {init.map((page) => {
             return (
-              <antd.Menu.Item key={server.name}>
-                <span className="d-flex align-items-center">
-                  <span>{server.name}</span>
+              <antd.Menu.Item key={page}>
+                <span className="flex items-center">
+                  <span>{page}</span>
                 </span>
               </antd.Menu.Item>
             );
@@ -85,7 +89,7 @@ const MainPage = ({ menuKey, content }: MainPageProps) => {
   };
 
   return (
-    <antd.Layout className="vh-100">
+    <antd.Layout className="h-screen">
       {renderMenu()}
 
       <antd.Layout className="bg-white">

@@ -1,86 +1,147 @@
 import React from 'react';
 import * as antd from 'antd';
+import useSWR from 'swr';
+// import axios from 'axios';
 
 import { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import { MainPage } from '../components/MainPage';
 import { useRouter } from 'next/router';
 import { ColumnsType } from 'antd/lib/table';
-import { getSession } from 'next-auth/client';
 
 import { Notification } from '../components/Notification';
-import { prisma } from '../database/db';
 import { AppContext } from '../components/AppContext';
 import { DangerButton } from '../components/DangerButton';
-import { AddService } from '../modals/AddService';
+import { AddRoom } from '../modals/AddRoom';
+import { Reserve } from '../modals/Reserve';
+import { getSession } from 'next-auth/client';
+import axios from 'axios';
 
-const Home = ({ services, error }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
+const Home = () => {
   const appCtx = React.useContext(AppContext);
-  const [dataSource, setDataSource] = React.useState<Service[]>([]); //coulmns data
+  // 型別
+  const [beds, setBeds] = React.useState<'' | '1' | '2' | '4'>();
+  const [roomType, setRoomType] = React.useState<'' | 'regular' | 'vip' | 'comercial'>();
 
   const router = useRouter();
   const [currentPage, setCurrentPage] = React.useState<number>(1);
-  const [total, setTotal] = React.useState<number>(0);
   const pageSize = 10;
 
-  interface Service {
-    id: number;
-    name: string;
+  const [page, setPage] = React.useState<{ current: number; size: number }>({
+    current: 1,
+    size: 10,
+  });
+
+  const makeURL = () => {
+    let params = new URLSearchParams();
+    params.append('pagination[page]', currentPage.toString());
+    params.append('pagination[pageSize]', pageSize.toString());
+    params.append('filters[checkIn][$eq]', 'false');
+    beds && params.append('filters[beds][$eq]', beds);
+    roomType && params.append('filters[Type][$eq]', roomType);
+    return `http://localhost:1337/api/rooms?${params.toString()}`;
+  };
+
+  const { data, error, mutate } = useSWR<{ data: any[]; meta: any }>(makeURL, (url) =>
+    appCtx.fetch('get', url),
+  );
+
+  const tableData2 = React.useMemo(() => {
+    return data?.data.map((item: any) => {
+      return { id: item.id, ...item.attributes };
+    });
+  }, [data]);
+
+  if (!data) {
+    return <div />;
   }
 
-  const columns: ColumnsType<Service> = [
+  const tableData = data?.data.map((item: any) => {
+    return { id: item.id, ...item.attributes };
+  });
+
+  const columns: ColumnsType<any> = [
     {
-      title: 'Name',
+      title: 'Room Number',
       align: 'center',
-      dataIndex: 'name',
+      dataIndex: 'roomNo',
     },
     {
-      title: 'Domain',
+      title: 'Beds',
       align: 'center',
-      dataIndex: 'domain',
+      dataIndex: 'beds',
     },
     {
-      title: 'Port',
+      title: 'Type',
       align: 'center',
-      dataIndex: 'port',
+      dataIndex: 'type',
     },
     {
       align: 'center',
       render: (item) => (
-        <DangerButton
-          title="刪除"
-          message="確認刪除"
-          onClick={async () => {
-            let data = await appCtx.fetch('delete', `/api/service?id=${item.id}`);
-            if (data) {
-              router.push('/Home');
-              Notification.add('success', 'Delete Success');
-            }
+        <antd.Button
+          type="primary"
+          onClick={() => {
+            appCtx.setModal(<Reserve roomNo={item.id} onSuccess={mutate} />);
           }}
-        />
+        >
+          預定
+        </antd.Button>
       ),
     },
   ];
 
-  React.useEffect(() => {
-    if (error) {
-      Notification.add('error', error);
-    }
-  }, []);
-
   const content = (
-    <>
-      <div className="d-flex justify-content-end mb-2">
+    <antd.Spin spinning={!data}>
+      <div className="flex justify-end mb-2">
+        <div className="flex">
+          <div className="mr-2 flex items-center">選擇床數</div>
+          <antd.Select
+            defaultValue={beds}
+            style={{ width: 150 }}
+            onChange={(select) => setBeds(select)}
+          >
+            <antd.Select.Option value="">{''}</antd.Select.Option>
+            <antd.Select.Option value="1">1</antd.Select.Option>
+            <antd.Select.Option value="2">2</antd.Select.Option>
+            <antd.Select.Option value="4">4</antd.Select.Option>
+          </antd.Select>
+        </div>
+
+        <div className="flex">
+          <div className="mx-2 flex items-center">選擇房型</div>
+          <antd.Select
+            defaultValue={roomType}
+            style={{ width: 150 }}
+            onChange={(select) => setRoomType(select)}
+          >
+            <antd.Select.Option value="">{''}</antd.Select.Option>
+            <antd.Select.Option value="regular">一般</antd.Select.Option>
+            <antd.Select.Option value="comercial">商務</antd.Select.Option>
+            <antd.Select.Option value="vip">VIP</antd.Select.Option>
+          </antd.Select>
+        </div>
+
+        <div className="flex-1" />
         <antd.Button
           type="primary"
           onClick={() => {
-            appCtx.setModal(<AddService />);
+            appCtx.setModal(<AddRoom onSuccess={mutate} />);
           }}
         >
           新增
         </antd.Button>
       </div>
-      <antd.Table dataSource={services} columns={columns} pagination={false} />
-    </>
+      <antd.Table
+        dataSource={tableData}
+        columns={columns}
+        pagination={{
+          current: currentPage,
+          pageSize: pageSize,
+          total: data?.meta.pagination.total,
+          onChange: (page) => setCurrentPage(page),
+        }}
+      />
+    </antd.Spin>
   );
 
   return <MainPage content={content} menuKey="Home" />;
@@ -99,10 +160,7 @@ export const getServerSideProps: GetServerSideProps = async ({ req, res, query }
       };
     }
 
-    const services = await prisma.service.findMany({
-      select: { id: true, name: true, domain: true, port: true },
-    });
-    return { props: { services } };
+    return { props: {} };
   } catch (error: any) {
     return { props: { error: error.message } };
   }

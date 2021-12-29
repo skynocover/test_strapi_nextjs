@@ -2,14 +2,9 @@ import React from 'react';
 import axios from 'axios';
 import * as antd from 'antd';
 
-import { Notification } from '../components/Notification';
+import { useSession, signOut } from 'next-auth/client';
 
-export interface service {
-  id: string;
-  domain: string;
-  name: string;
-  port: string;
-}
+import { Notification } from '../components/Notification';
 
 interface AppContextProps {
   setModal: (modal: any) => void;
@@ -25,8 +20,12 @@ interface AppContextProps {
     param?: any,
   ) => Promise<any>;
 
-  dataSource: service[];
-  setDataSource: React.Dispatch<React.SetStateAction<service[]>>;
+  cart: any[];
+  setCart: React.Dispatch<React.SetStateAction<any[]>>;
+  total: number;
+  setTotal: React.Dispatch<React.SetStateAction<number>>;
+  addItem: (item: { id: string; price: number; quantity: number }) => void;
+  removeItem: (item: { id: string; price: number; quantity: number }) => void;
 }
 
 const AppContext = React.createContext<AppContextProps>(undefined!);
@@ -38,10 +37,58 @@ interface AppProviderProps {
 const AppProvider = ({ children }: AppProviderProps) => {
   const [modal, setModal] = React.useState<any>(null);
 
+  const [session, loading] = useSession();
+
   const [account, setAccount] = React.useState('admin');
   const [isAdmin, setIsAdmin] = React.useState(false);
 
-  const [dataSource, setDataSource] = React.useState<service[]>([]); //coulmns data
+  ///////////////////////////////////////
+  const [cart, setCart] = React.useState<any[]>([]);
+  const [total, setTotal] = React.useState<number>(0);
+
+  const addItem = (item: { id: string; price: number; quantity: number }) => {
+    //check for item already in cart
+    //if not in cart, add item if item is found increase quanity ++
+    const newItem = cart.find((i) => i.id === item.id);
+    // if item is not new, add to cart, set quantity to 1
+    if (!newItem) {
+      //set quantity property to 1
+      item.quantity = 1;
+      console.log(total, item.price);
+      setCart([...cart, item]);
+      setTotal(total + item.price);
+    } else {
+      setCart(
+        cart.map((item) =>
+          item.id === newItem.id ? Object.assign({}, item, { quantity: item.quantity + 1 }) : item,
+        ),
+      );
+
+      setTotal(total + item.price);
+    }
+  };
+  const removeItem = (item: { id: string; price: number; quantity: number }) => {
+    //check for item already in cart
+    //if not in cart, add item if item is found increase quanity ++
+    const newItem = cart.find((i) => i.id === item.id);
+    if (newItem.quantity > 1) {
+      setCart(
+        cart.map((item) =>
+          item.id === newItem.id ? Object.assign({}, item, { quantity: item.quantity - 1 }) : item,
+        ),
+      );
+
+      setTotal(total - item.price);
+    } else {
+      const items = [...cart];
+      const index = items.findIndex((i) => i.id === newItem.id);
+
+      items.splice(index, 1);
+
+      setCart(items);
+      setTotal(total - item.price);
+    }
+  };
 
   /////////////////////////////////////////////////////
 
@@ -61,12 +108,9 @@ const AppProvider = ({ children }: AppProviderProps) => {
         method,
         url,
         data: param,
+        headers: { Authorization: 'Bearer ' + session?.jwt! },
       });
       console.log('response', response.data);
-
-      if (response.data.errorCode !== 0) {
-        throw new Error(response.data.errorMessage);
-      }
 
       data = response.data;
     } catch (error: any) {
@@ -89,8 +133,12 @@ const AppProvider = ({ children }: AppProviderProps) => {
 
         fetch,
 
-        dataSource,
-        setDataSource,
+        cart,
+        setCart,
+        total,
+        setTotal,
+        addItem,
+        removeItem,
       }}
     >
       {modal && (
