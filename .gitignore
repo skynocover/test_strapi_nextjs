@@ -31,3 +31,4 @@ yarn-error.log*
 .env.production.local
 
 pages/home2.tsx
+.env
